@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-AI LinkedIn Post Generator using LangChain
-Built with OpenAI GPT-4, HuggingFace Embeddings, and Modal integration
+Fixed GitHub Models API integration for LinkedIn Post Generator
 """
 
 import os
@@ -11,13 +10,16 @@ import threading
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 
-# LangChain imports
-from langchain_openai import OpenAI
+# LangChain imports - Use ChatOpenAI instead of OpenAI
+from langchain_openai import ChatOpenAI  # Changed from OpenAI to ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# OpenAI client for direct API calls
+from openai import OpenAI as OpenAIClient
 
 # Web framework imports
 from flask import Flask, request, jsonify, render_template
@@ -29,6 +31,7 @@ import logging
 from datetime import datetime
 import time
 from dotenv import load_dotenv
+import re
 
 # Load environment variables from .env file
 load_dotenv()
@@ -56,14 +59,25 @@ class LinkedInPostGenerator:
         self.setup_models()
         self.setup_few_shot_examples()
 
+        # Test GitHub Models API
+        logger.info("Testing GitHub Models API connection...")
+        if self.test_github_models_api():
+            logger.info("GitHub Models API is working correctly!")
+        else:
+            logger.warning("GitHub Models API test failed, but continuing...")
+
     def setup_models(self):
         """Initialize LangChain models and embeddings"""
-        try:
-            # Initialize OpenAI LLM with GitHub Models using LangChain OpenAI wrapper
-            endpoint = "https://models.inference.ai.azure.com"
-            self.model_name = "gpt-4o-mini"
+        # Use the correct model name with provider prefix
+        self.model_name = "openai/gpt-4o-mini"
 
-            self.llm = OpenAI(
+        try:
+            # Initialize ChatOpenAI LLM with GitHub Models
+            # GitHub Models API endpoint
+            endpoint = "https://models.github.ai/inference"
+
+            # Use ChatOpenAI instead of OpenAI for chat completions
+            self.llm = ChatOpenAI(
                 base_url=endpoint,
                 api_key=self.github_token,
                 model=self.model_name,
@@ -71,16 +85,20 @@ class LinkedInPostGenerator:
                 max_tokens=500
             )
 
-            # Initialize HuggingFace Embeddings with new import
+            # Initialize HuggingFace Embeddings
+            logger.info("Initializing HuggingFace embeddings...")
             self.embeddings = HuggingFaceEmbeddings(
                 model_name="sentence-transformers/all-MiniLM-L6-v2",
                 model_kwargs={'device': 'cpu'}
             )
 
-            logger.info("Models initialized successfully")
+            logger.info(f"Models initialized successfully with model: {self.model_name}")
 
         except Exception as e:
             logger.error(f"Error initializing models: {e}")
+            logger.error(f"Make sure your GITHUB_TOKEN is valid and has access to GitHub Models")
+            logger.error(f"You can get a GitHub token at: https://github.com/settings/tokens")
+            logger.error(f"GitHub Models endpoint: {endpoint}")
             raise
 
     def setup_few_shot_examples(self):
@@ -189,13 +207,12 @@ LinkedIn Post:"""
 
         return PromptTemplate(
             input_variables=["topic", "language"],
-            template=template.format(
-                ai_example=self.few_shot_examples["AI"],
-                remote_work_example=self.few_shot_examples["Remote Work"],
-                digital_marketing_example=self.few_shot_examples["Digital Marketing"],
-                topic="{topic}",
-                language="{language}"
-            )
+            template=template,
+            partial_variables={
+                "ai_example": self.few_shot_examples["AI"],
+                "remote_work_example": self.few_shot_examples["Remote Work"],
+                "digital_marketing_example": self.few_shot_examples["Digital Marketing"]
+            }
         )
 
     def generate_post(self, topic: str, language: str = "English") -> LinkedInPost:
@@ -235,7 +252,6 @@ LinkedIn Post:"""
 
     def extract_hashtags(self, content: str) -> List[str]:
         """Extract hashtags from generated content"""
-        import re
         hashtag_pattern = r'#\w+'
         hashtags = re.findall(hashtag_pattern, content)
         return hashtags
@@ -251,6 +267,91 @@ LinkedIn Post:"""
         except Exception as e:
             logger.error(f"Error in similarity search: {e}")
             return []
+
+    def test_github_models_api(self):
+        """Test GitHub Models API directly to verify it works"""
+        try:
+            endpoint = "https://models.github.ai/inference"
+            model = "openai/gpt-4o-mini"
+
+            client = OpenAIClient(
+                base_url=endpoint,
+                api_key=self.github_token,
+            )
+
+            response = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant.",
+                    },
+                    {
+                        "role": "user",
+                        "content": "Say hello in one sentence.",
+                    }
+                ],
+                temperature=0.7,
+                top_p=1.0,
+                model=model,
+                max_tokens=50
+            )
+
+            test_response = response.choices[0].message.content
+            logger.info(f"GitHub Models API test successful: {test_response}")
+            return True
+
+        except Exception as e:
+            logger.error(f"GitHub Models API test failed: {e}")
+            return False
+
+
+# Alternative approach using direct OpenAI client instead of LangChain
+class DirectLinkedInPostGenerator:
+    """Alternative implementation using direct OpenAI client"""
+
+    def __init__(self, github_token: str):
+        self.github_token = github_token
+        self.client = OpenAIClient(
+            base_url="https://models.github.ai/inference",
+            api_key=github_token,
+        )
+        self.model_name = "openai/gpt-4o-mini"
+
+    def generate_post(self, topic: str, language: str = "English") -> str:
+        """Generate LinkedIn post using direct OpenAI client"""
+
+        system_prompt = """You are a professional LinkedIn content creator and social media expert. Your task is to generate engaging LinkedIn posts that drive meaningful engagement and professional networking.
+
+Create LinkedIn posts that:
+✅ START with an engaging hook (emoji, question, or bold statement)
+✅ INCLUDE personal insights, experiences, or observations
+✅ USE bullet points or numbered lists for key points
+✅ ADD 6-8 relevant hashtags at the end
+✅ INCLUDE a call-to-action or engaging question
+✅ KEEP it professional but conversational
+✅ LENGTH: 150-300 words
+✅ MAKE it shareable and discussion-worthy
+
+TONE: Professional yet approachable, thought-provoking, and authentic"""
+
+        user_prompt = f"Create a LinkedIn post about '{topic}' in {language} language."
+
+        try:
+            response = self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                model=self.model_name,
+                temperature=0.7,
+                max_tokens=500
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+            logger.error(f"Error generating post: {e}")
+            raise
 
 
 # Flask Web Application
@@ -272,15 +373,34 @@ def initialize_generator():
         logger.warning("GitHub token not found in environment variables.")
         logger.info("Please create a .env file with: GITHUB_TOKEN=your_token")
         logger.info("Or set it as system environment variable")
+        logger.info("You can get a GitHub token at: https://github.com/settings/tokens")
         logger.info("Running in demo mode...")
         return None
 
     try:
-        generator = LinkedInPostGenerator(github_token)
-        logger.info("Generator initialized successfully with GitHub Models API")
+        logger.info("Initializing LinkedIn Post Generator...")
+
+        # Try the LangChain approach first
+        try:
+            generator = LinkedInPostGenerator(github_token)
+            logger.info("Generator initialized successfully with LangChain and GitHub Models API")
+        except Exception as e:
+            logger.warning(f"LangChain approach failed: {e}")
+            logger.info("Trying direct OpenAI client approach...")
+
+            # Fallback to direct OpenAI client
+            generator = DirectLinkedInPostGenerator(github_token)
+            logger.info("Generator initialized successfully with direct OpenAI client")
+
         return generator
+
     except Exception as e:
         logger.error(f"Failed to initialize generator: {e}")
+        logger.error("This might be due to:")
+        logger.error("1. Invalid GitHub token")
+        logger.error("2. GitHub Models API access issues")
+        logger.error("3. Network connectivity problems")
+        logger.error("4. Missing dependencies")
         logger.info("Falling back to demo mode...")
         return None
 
@@ -314,16 +434,25 @@ def generate_post():
                 'demo_mode': True
             })
 
-        # Generate post using LangChain
-        post = generator.generate_post(topic, language)
-
-        return jsonify({
-            'content': post.content,
-            'topic': post.topic,
-            'language': post.language,
-            'hashtags': post.hashtags,
-            'generated_at': post.generated_at
-        })
+        # Generate post using the available generator
+        if isinstance(generator, LinkedInPostGenerator):
+            post = generator.generate_post(topic, language)
+            return jsonify({
+                'content': post.content,
+                'topic': post.topic,
+                'language': post.language,
+                'hashtags': post.hashtags,
+                'generated_at': post.generated_at
+            })
+        else:
+            # Direct generator
+            content = generator.generate_post(topic, language)
+            return jsonify({
+                'content': content,
+                'topic': topic,
+                'language': language,
+                'generated_at': datetime.now().isoformat()
+            })
 
     except Exception as e:
         logger.error(f"Error in generate_post: {e}")
@@ -333,7 +462,7 @@ def generate_post():
 def generate_demo_post(topic: str, language: str) -> str:
     """Generate demo post when API is not available"""
     demo_posts = {
-        "AI": f"""🤖 The AI revolution is here, and it's transforming how we work!
+        "AI": """🤖 The AI revolution is here, and it's transforming how we work!
 
 Just implemented an AI solution that boosted our team's productivity by 40%. Here's what I learned:
 
@@ -348,7 +477,7 @@ What's your experience with AI in your industry? Share your thoughts! 👇
 
 #AI #ArtificialIntelligence #Innovation #MachineLearning #FutureOfWork #Technology #DigitalTransformation #Productivity""",
 
-        "Remote Work": f"""🏠 Remote work taught me more about leadership than any office ever could.
+        "Remote Work": """🏠 Remote work taught me more about leadership than any office ever could.
 
 After 3 years of leading distributed teams, here are my key insights:
 
@@ -409,10 +538,17 @@ def test_chain_with_topics():
     for topic in test_topics:
         try:
             print(f"\n🔄 Generating post for: {topic}")
-            post = generator.generate_post(topic)
-            print(f"✅ Generated successfully!")
-            print(f"📝 Content preview: {post.content[:100]}...")
-            print(f"🏷️  Hashtags: {post.hashtags}")
+
+            if isinstance(generator, LinkedInPostGenerator):
+                post = generator.generate_post(topic)
+                print(f"✅ Generated successfully!")
+                print(f"📝 Content preview: {post.content[:100]}...")
+                print(f"🏷️  Hashtags: {post.hashtags}")
+            else:
+                content = generator.generate_post(topic)
+                print(f"✅ Generated successfully!")
+                print(f"📝 Content preview: {content[:100]}...")
+
             print("-" * 50)
 
         except Exception as e:
@@ -422,7 +558,7 @@ def test_chain_with_topics():
 def signal_handler(signum, frame):
     """Handle graceful shutdown"""
     logger.info("Received shutdown signal, cleaning up...")
-    os._exit(0)
+    sys.exit(0)
 
 
 def run_flask_app():
@@ -433,31 +569,18 @@ def run_flask_app():
         signal.signal(signal.SIGTERM, signal_handler)
 
         port = int(os.getenv("PORT", 5000))
+        host = os.getenv("HOST", "127.0.0.1")
 
-        # Use threaded=True and configure for Windows
+        logger.info(f"Starting Flask app on {host}:{port}")
+
         app.run(
-            host="127.0.0.1",  # Use localhost instead of 0.0.0.0 on Windows
+            host=host,
             port=port,
-            debug=False,  # Set to False to avoid issues
+            debug=False,
             threaded=True,
-            use_reloader=False  # Disable reloader to prevent socket issues
+            use_reloader=False
         )
 
-    except OSError as e:
-        if e.errno == 10038:  # WinError 10038
-            logger.error("Socket error occurred. Trying alternative server...")
-            # Try with different configuration
-            try:
-                from werkzeug.serving import make_server
-                server = make_server('127.0.0.1', port, app, threaded=True)
-                logger.info(f"Server starting on http://127.0.0.1:{port}")
-                server.serve_forever()
-            except Exception as alt_e:
-                logger.error(f"Alternative server also failed: {alt_e}")
-                print("Try running with: python -m flask run --host=127.0.0.1 --port=5000")
-        else:
-            logger.error(f"Unexpected error: {e}")
-            raise
     except Exception as e:
         logger.error(f"Failed to start Flask app: {e}")
         raise
@@ -471,5 +594,5 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "test":
         test_chain_with_topics()
     else:
-        # Run Flask app with proper error handling
+        # Run Flask app
         run_flask_app()
