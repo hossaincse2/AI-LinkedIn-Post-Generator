@@ -1,10 +1,24 @@
-
-# README.md content
-README_CONTENT = """
 # AI LinkedIn Post Generator
 
 A sophisticated AI-powered LinkedIn post generator built with LangChain, OpenAI GPT-4, and HuggingFace embeddings.
 
+## 📁 Folder Structure
+
+```
+linkedin_post_generator/
+├── app.py                          # Main Flask application
+├── requirements.txt                # Python dependencies
+├── .env                           # Environment variables (create this)
+├── static/                        # Static files directory
+│   ├── css/
+│   │   └── styles.css            # CSS styles
+│   ├── js/
+│   │   └── script.js             # JavaScript functionality
+│   └── images/                   # Optional: images/icons
+├── templates/                     # HTML templates directory
+│   └── index.html                # Main HTML template
+└── README.md                     # Project documentation
+```
 ## Features
 
 - 🤖 AI-powered content generation using OpenAI GPT-4
