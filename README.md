@@ -2,6 +2,11 @@
 
 A sophisticated AI-powered LinkedIn post generator built with LangChain, OpenAI GPT-4, and HuggingFace embeddings.
 
+![Screenshot_1.png](static/img/Screenshot_1.png)
+![Screenshot_2.png](static/img/Screenshot_2.png)
+![Screenshot_3.png](static/img/Screenshot_3.png)
+![Screenshot_4.png](static/img/Screenshot_4.png)
+
 ## 📁 Folder Structure
 
 ```

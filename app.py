@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fixed GitHub Models API integration for LinkedIn Post Generator
+GitHub Models API integration for LinkedIn Post Generator
 """
 
 import os
